@@ -87,14 +87,14 @@ vocabs, word2id, id2word, vocab_size = None, None, None, None
 max_seq_len = 200#TODO:change later when uses full document words
 lstm_hidden_size = 100
 class_size = 60
-batch_size = 500
+batch_size = 2000
 
 train_full = read_corpus(data_dir, 0, train_percent)
 test_full = read_corpus(data_dir, train_percent, 1.0)
 train_small = read_corpus(data_dir, 0.2, 0.3)
 test_small = read_corpus(data_dir, train_percent, train_percent + 0.05)
-train_data = train_small
-test_data = test_small
+train_data = train_full
+test_data = test_full
 
 def doc_iter(docs):
     for doc in docs:
@@ -326,12 +326,14 @@ def run2():
                     #ret = sess.run([train, loss], feed_dict={input_vecs:vecs, target:y})
                 
                     if count==batch_size:
-                        print('-------------batch', (i+1)/batch_size)
+                        print('-------------batch', int((i+1)/batch_size))
                         sess.run([train, loss], feed_dict={input_vecs:batch_inputs, targets:batch_outputs})
                         count = 0
                         batch_inputs = []
                         batch_outputs = []
+                print('score in train...')
                 print('score in train, pas======', pas, ':', score2(sess, predictions, input_vecs, train_data))
+                print('score in test...')
                 print('score in test, pas======', pas, ':', score2(sess, predictions, input_vecs, test_data))
 
 def main():
