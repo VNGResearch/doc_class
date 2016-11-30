@@ -2,12 +2,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
+import os, sys, glob, time
+
+from contextlib import contextmanager
 from collections import namedtuple
-import os, glob
+
 import gensim
 from sklearn.feature_extraction.text import CountVectorizer
+
 import numpy as np
+import tensorflow as tf
 
 import pdb
 
@@ -30,6 +34,16 @@ class Log(object):
     @staticmethod
     def error(sender, message):
         sys.stderr.write('---ERROR: ', sender, message, '\n', sep='\t')
+
+@contextmanager
+def time_it(msg_in, msg_out):
+    #print(msg_in)
+    sys.stderr.write(msg_in + '\n')
+    start = time.time()
+    yield
+    duration = time.time() - start
+    #print(msg_out % duration)
+    sys.stderr.write(msg_out % duration + '\n')
 
 #return multiple generator
 def multigen(gen_func):
@@ -84,10 +98,10 @@ test_percent = 0.2
 token_type = 'word'
 vocabs, word2id, id2word, vocab_size = None, None, None, None
 
-max_seq_len = 200#TODO:change later when uses full document words
+max_seq_len = 216#TODO:change later when uses full document words
 lstm_hidden_size = 100
 class_size = 60
-batch_size = 2000
+batch_size = 1000
 
 train_full = read_corpus(data_dir, 0, train_percent)
 test_full = read_corpus(data_dir, train_percent, 1.0)
@@ -308,37 +322,51 @@ def run2():
         count = 0
         batch_inputs = []
         batch_outputs = []
+        best_acc = -1
 
         with tf.Session() as sess:
+            saver = tf.train.Saver()
             sess.run(init)
-            print('score at init...')
-            print('score in train at init:', score2(sess, predictions, input_vecs, train_data))
-            for pas in range(10):
+            with time_it('---score at the initilization...', '------completed in %.2f s'): 
+                acc = score2(sess, predictions, input_vecs, train_data)
+                print('***acc init=', acc)
+                best_acc = acc
+
+            #for pas in range(10):
+            pas=0
+            while(True):
                 print('train======pas', pas)
                 for i, doc in enumerate(train_data):
                     count +=1
                     vecs = get_input_words_vec(doc.words)
                     batch_inputs.append(vecs)
-                    #y = np.zeros(shape=(class_size, ))
                     y = [0]*class_size
                     y[doc.topic_id] = 1
                     batch_outputs.append(y)
-                    #ret = sess.run([train, loss], feed_dict={input_vecs:vecs, target:y})
                 
                     if count==batch_size:
-                        print('-------------batch', int((i+1)/batch_size))
-                        sess.run([train, loss], feed_dict={input_vecs:batch_inputs, targets:batch_outputs})
+                        with time_it('---train batch' + int((i+1)/batch_size), '------completed in %.2f s'): 
+                            sess.run([train, loss], feed_dict={input_vecs:batch_inputs, targets:batch_outputs})
                         count = 0
                         batch_inputs = []
                         batch_outputs = []
-                print('score in train...')
-                print('score in train, pas======', pas, ':', score2(sess, predictions, input_vecs, train_data))
-                print('score in test...')
-                print('score in test, pas======', pas, ':', score2(sess, predictions, input_vecs, test_data))
+
+                with time_it('---score in train set (pas={})...'.format(pas), '------completed in %.2f s'): 
+                    acc = score2(sess, predictions, input_vecs, train_data)
+                    print('***acc int train=', acc)
+                with time_it('---score in test set (pas={})...'.format(pas), '------completed in %.2f s'): 
+                    acc = score2(sess, predictions, input_vecs, test_data)
+                    print('***acc in test=', acc)
+                    if acc>best_acc:
+                        with time_it('---save model*...', '------completed in %.2f s'): 
+                            saver.save(sess, 'rnn.model')
+                        best_acc = acc
+
+                pas +=1
 
 def main():
-    #run1()
-    run2()
+    #run1()#online leaning one document at a time
+    run2()# batch training
     print('DONE')
 
 if __name__ == '__main__':
